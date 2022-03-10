@@ -38,7 +38,7 @@ def import_data(update, context):
 	chat = update.effective_chat  # type: Optional[Chat]
 	user = update.effective_user  # type: Optional[User]
 	bot = context.bot
-    
+
 	# TODO: allow uploading doc with command, not just as reply
 	# only work with a doc
 
@@ -75,7 +75,7 @@ def import_data(update, context):
 
 		# Check if backup is this chat
 		try:
-			if data.get(str(chat.id)) == None:
+			if data.get(str(chat.id)) is None:
 				if conn:
 					text = "Backup comes from another chat, I can't return another chat to chat *{}*".format(chat_name)
 				else:

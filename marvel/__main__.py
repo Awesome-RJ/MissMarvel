@@ -71,7 +71,7 @@ for module_name in ALL_MODULES:
     if not hasattr(imported_module, "__mod_name__"):
         imported_module.__mod_name__ = imported_module.__name__
 
-    if not imported_module.__mod_name__.lower() in IMPORTED:
+    if imported_module.__mod_name__.lower() not in IMPORTED:
         IMPORTED[imported_module.__mod_name__.lower()] = imported_module
     else:
         raise Exception("Can't have two modules with the same name! Please change one")
@@ -139,7 +139,7 @@ def start(update, context):
             if args[0].lower() == "help":
                 send_help(update.effective_chat.id, tld(update.effective_message, HELP_STRINGS))
 
-            
+
             elif args[0].lower().startswith("stngs_"):
                 match = re.match("stngs_(.*)", args[0].lower())
                 chat = dispatcher.bot.getChat(match.group(1))
@@ -162,12 +162,12 @@ def start(update, context):
                 judul = pagewiki.title
                 summary = pagewiki.summary
                 if len(summary) >= 4096:
-                    summary = summary[:4000]+"..."
+                    summary = f'{summary[:4000]}...'
                 message.reply_text("<b>{}</b>\n{}".format(judul, summary), parse_mode=ParseMode.HTML,
                     reply_markup=InlineKeyboardMarkup(
                             [[InlineKeyboardButton(text=tld(update.effective_message, "Read it on Wikipedia"), url=pagewiki.url)]]))
 
-            
+
         else:
             first_name = update.effective_user.first_name
             buttons = InlineKeyboardMarkup( 
@@ -224,11 +224,8 @@ def error_callback(update, context):
     # we raise the error again, so the logger module catches it. If you don't use the logger module, use it.
     try:
         raise context.error
-    except Unauthorized:
+    except (Unauthorized, BadRequest):
         # remove update.message.chat_id from conversation list
-        LOGGER.exception('Update "%s" caused error "%s"', update, context.error)
-    except BadRequest:
-        # handle malformed requests - read more below!
         LOGGER.exception('Update "%s" caused error "%s"', update, context.error)
     except TimedOut:
         # handle slow connection problems
@@ -286,13 +283,11 @@ def help_button(update, context):
         # ensure no spinny white circle
         context.bot.answer_callback_query(query.id)
     except Exception as excp:
-        if excp.message == "Message is not modified":
-            pass
-        elif excp.message == "Query_id_invalid":
-            pass
-        elif excp.message == "Message can't be deleted":
-            pass
-        else:
+        if excp.message not in [
+            "Message is not modified",
+            "Query_id_invalid",
+            "Message can't be deleted",
+        ]:
             query.message.edit_text(excp.message)
             LOGGER.exception("Exception in help buttons. %s", str(query.data))
 
@@ -335,18 +330,17 @@ def send_settings(chat_id, user_id, user=False):
             dispatcher.bot.send_message(user_id, tld(chat_id, "Looks like there are no user-specific settings available"),
                                         parse_mode=ParseMode.MARKDOWN)
 
+    elif CHAT_SETTINGS:
+        chat_name = dispatcher.bot.getChat(chat_id).title
+        dispatcher.bot.send_message(user_id,
+                                    text=tld(chat_id, "Which module do you want to check for settings {}?").format(
+                                        chat_name),
+                                    reply_markup=InlineKeyboardMarkup(
+                                        paginate_modules(0, CHAT_SETTINGS, "stngs", chat=chat_id)))
     else:
-        if CHAT_SETTINGS:
-            chat_name = dispatcher.bot.getChat(chat_id).title
-            dispatcher.bot.send_message(user_id,
-                                        text=tld(chat_id, "Which module do you want to check for settings {}?").format(
-                                            chat_name),
-                                        reply_markup=InlineKeyboardMarkup(
-                                            paginate_modules(0, CHAT_SETTINGS, "stngs", chat=chat_id)))
-        else:
-            dispatcher.bot.send_message(user_id, tld(chat_id, "Looks like there are no chat settings available \nSend this "
-                                                 "to your chat as an admin to find the current settings!"),
-                                        parse_mode=ParseMode.MARKDOWN)
+        dispatcher.bot.send_message(user_id, tld(chat_id, "Looks like there are no chat settings available \nSend this "
+                                             "to your chat as an admin to find the current settings!"),
+                                    parse_mode=ParseMode.MARKDOWN)
 
 
 
@@ -403,13 +397,11 @@ def settings_button(update, context):
         # ensure no spinny white circle
         bot.answer_callback_query(query.id)
     except BadRequest as excp:
-        if excp.message == "Message is not modified":
-            pass
-        elif excp.message == "Query_id_invalid":
-            pass
-        elif excp.message == "Message can't be deleted":
-            pass
-        else:
+        if excp.message not in [
+            "Message is not modified",
+            "Query_id_invalid",
+            "Message can't be deleted",
+        ]:
             LOGGER.exception("Exception in settings buttons. %s", str(query.data))
 
 
@@ -422,19 +414,18 @@ def get_settings(update, context):
     #args = msg.text.split(None, 1) #Unused variable
 
     # ONLY send settings in PM
-    if chat.type != chat.PRIVATE:
-        if is_user_admin(chat, user.id):
-            text = "Click here to get this chat's settings, as well as yours."
-            msg.reply_text(text,
-                           reply_markup=InlineKeyboardMarkup(
-                               [[InlineKeyboardButton(text="Settings",
-                                                      url="t.me/{}?start=stngs_{}".format(
-                                                          bot.username, chat.id))]]))
-        else:
-            text = "Click here to check your settings."
-
-    else:
+    if chat.type == chat.PRIVATE:
         send_settings(chat.id, user.id, update, True)
+
+    elif is_user_admin(chat, user.id):
+        text = "Click here to get this chat's settings, as well as yours."
+        msg.reply_text(text,
+                       reply_markup=InlineKeyboardMarkup(
+                           [[InlineKeyboardButton(text="Settings",
+                                                  url="t.me/{}?start=stngs_{}".format(
+                                                      bot.username, chat.id))]]))
+    else:
+        text = "Click here to check your settings."
 
 
 def migrate_chats(update, context):
@@ -499,5 +490,5 @@ def main():
     updater.idle()
 
 if __name__ == '__main__':
-    LOGGER.info("Successfully loaded modules: " + str(ALL_MODULES))
+    LOGGER.info(f"Successfully loaded modules: {str(ALL_MODULES)}")
     main()
